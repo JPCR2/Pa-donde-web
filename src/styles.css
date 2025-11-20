@@ -1,78 +1,104 @@
-:root{--accent:#ff6d00;--primary:#00c896;--bg:#0b1420;--card:#15212c;--text:#ffffff;--muted:#9aa0a6;--sidebar:380px}
+.register-card .form-control+.form-control{margin-top:18px}
+:root{--accent:#ff6d00;--primary:#00c896;--bg:#0b1420;--card:#15212c;--text:#ffffff;--muted:#9aa0a6;--sidebar:340px;--header-height:76px}
 
 /* Fondo general con degradado sutil tipo app moderna */
 body{background:radial-gradient(1200px 600px at 10% 10%, #0f1e2e 0%, #0b1420 40%, #0b1420 100%) fixed}
 
+body.map-active{background:#05111c}
+body.map-active .app-main{max-width:none;width:100%;padding:0}
+
+.map-view{display:flex;flex-direction:column;min-height:100vh;background:#061623;color:#f4f7fb}
+.map-header{height:var(--header-height);display:flex;align-items:center;justify-content:space-between;padding:0 28px;background:linear-gradient(90deg,#007b4d,#00a46b);color:#fff;box-shadow:0 2px 10px rgba(0,0,0,.25)}
+.map-header .header-left{display:flex;align-items:center;gap:18px}
+.icon-button{width:44px;height:44px;border-radius:12px;border:0;background:rgba(255,255,255,.18);display:flex;flex-direction:column;justify-content:center;align-items:center;gap:6px;cursor:pointer;transition:background .2s ease}
+.icon-button span{display:block;width:22px;height:2px;background:#fff;border-radius:1px}
+.icon-button:hover{background:rgba(255,255,255,.28)}
+.brand-stack{display:flex;align-items:center;gap:14px}
+.brand-logo-icon{width:44px;height:44px;border-radius:14px;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;font-weight:700;letter-spacing:.5px}
+.brand-text{display:flex;flex-direction:column;line-height:1}
+.brand-title{font-size:1.35rem;font-weight:700;color:#fff}
+.brand-subtitle{font-size:.8rem;color:rgba(255,255,255,.8)}
+.map-header .btn{font-weight:600}
+
+.map-body{flex:1;display:flex;gap:24px;padding:28px;min-height:calc(100vh - var(--header-height));box-sizing:border-box}
+.map-body::before{content:"";display:none}
+.side-panel{width:var(--sidebar);max-width:90vw;height:100%;overflow:auto;padding:18px 16px 20px 20px;background:rgba(7,26,39,.92);border-radius:22px;box-shadow:0 18px 48px rgba(0,0,0,.35)}
+.side-panel::-webkit-scrollbar{width:10px}
+.side-panel::-webkit-scrollbar-track{background:rgba(255,255,255,.02);border-radius:10px}
+.side-panel::-webkit-scrollbar-thumb{background:#1f2839;border-radius:10px}
+.map-wrapper{flex:1;position:relative;background:#071e31;border-radius:20px;padding:18px;box-shadow:0 12px 40px rgba(0,0,0,.35)}
+
+.map-controls{position:absolute;top:26px;right:34px;z-index:1300;pointer-events:none;display:flex}
+.map-controls .btn{pointer-events:auto}
+.map-controls .btn.shadow-sm{box-shadow:0 6px 18px rgba(0,0,0,.25)}
+
+.map-column{border-left:0;padding-left:0}
+
+@media (max-width: 992px){
+	.map-body{flex-direction:column;padding:20px}
+	.side-panel{width:100%;max-height:320px;padding-right:0}
+	.map-wrapper{padding:16px}
+}
+
 /* ---------- LOGIN ---------- */
-#login-screen{min-height:80vh;align-items:center}
-.login-card{position:relative;background:var(--card);color:var(--text);border-radius:18px;padding:28px 28px 20px;box-shadow:0 16px 60px rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.05)}
-.btn-close-custom{position:absolute;right:14px;top:12px;width:32px;height:32px;border-radius:50%;border:0;background:transparent;color:#c9d3dc;font-size:24px;line-height:28px;cursor:pointer}
-.btn-close-custom:hover{background:rgba(255,255,255,.06)}
-.brand-badge{width:84px;height:84px;border-radius:18px;margin:0 auto 10px;background:#14b8a6;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 24px rgba(20,184,166,.45)}
-.brand-name{font-weight:700;font-size:1.8rem;text-align:center;color:#e9f7f3;margin-bottom:.25rem}
-.text-brand{color:#14b8a6}
+#login-screen{min-height:100vh;align-items:center}
+.login-card{position:relative;background:rgba(12,28,42,.82);backdrop-filter:blur(18px);color:var(--text);border-radius:26px;padding:36px 40px 34px;box-shadow:0 24px 60px rgba(5,12,20,.45), inset 0 0 0 1px rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.03);max-width:440px;margin:0 auto}
+.btn-close-card{position:absolute;right:24px;top:22px;width:40px;height:40px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:#d7e5f1;font-size:26px;line-height:32px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s ease}
+.btn-close-card:hover{background:rgba(255,255,255,.12)}
+.brand-icon{width:86px;height:86px;margin:0 auto;background:url('./assets/logo-padonde.svg') center/contain no-repeat;filter:drop-shadow(0 10px 22px rgba(0,175,130,.45))}
+.brand-name{font-weight:600;font-size:1.15rem;text-align:center;color:#8fa8b9;margin-bottom:.25rem;text-transform:uppercase;letter-spacing:.2rem}
+.welcome-heading{font-size:2.1rem;font-weight:700;color:#05c083;margin-bottom:.75rem}
+.text-brand{color:#05c083}
 .login-card .form-label{color:#c5d0d8}
-.login-card .form-control{background:#1e2b36;border:1px solid #2b3a44;color:#e7eff6}
+.login-card .form-control{background:rgba(24,42,58,.85);border:1px solid rgba(255,255,255,.06);color:#e7eff6;border-radius:16px;padding:0.95rem 1rem}
 .login-card .form-control::placeholder{color:#9bb0bd}
 .login-card .form-control:focus{border-color:#1dd1a1;box-shadow:0 0 0 .2rem rgba(29,209,161,.15)}
-.login-card .btn-primary{background:var(--primary);border-color:var(--primary);font-weight:600}
+.login-card .btn-primary{background:linear-gradient(90deg,#00c38b,#05d69a);border:0;font-weight:600;border-radius:16px;padding:0.95rem 1rem;box-shadow:0 12px 30px rgba(0,182,126,.35)}
 .login-card .btn-primary:hover{filter:brightness(.95)}
 .login-card .aux{color:#99a7b4}
 .login-card .aux a{color:#58d3b4;text-decoration:none}
 .login-card .aux a:hover{text-decoration:underline}
 
 /* Registro: reusar estilos de login con ligeros cambios */
-.register-card{padding:34px 34px 26px}
-.register-card .btn-close-custom{left:14px;right:auto}
-.register-card .btn-success{background:var(--primary);border-color:var(--primary);font-weight:600}
+.register-card{max-width:520px;padding:42px 48px 38px}
+.btn-back-card{position:absolute;left:28px;top:24px;border-radius:12px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:#fff;font-weight:600;padding:.45rem 1rem;cursor:pointer;box-shadow:0 10px 18px rgba(0,0,0,.35)}
+.btn-back-card:hover{background:rgba(255,255,255,.12)}
+.register-card .btn-success{background:linear-gradient(90deg,#00c38b,#05d69a);border:0;font-weight:600;border-radius:16px;padding:0.95rem 1rem;box-shadow:0 14px 32px rgba(0,182,126,.35)}
 .register-card .btn-success:hover{filter:brightness(.98)}
-.register-card .form-control{background:#172227;border:1px solid #24333b;color:#e7eff6}
+.register-card .form-control{background:rgba(24,42,58,.82);border:1px solid rgba(255,255,255,.08);color:#e7eff6;border-radius:16px;padding:0.95rem 1rem}
 .register-card .form-control::placeholder{color:#7f98a2}
 
 /* Mapa con marco y esquinas redondeadas */
-.map-frame{height:70vh;min-height:380px;border-radius:14px;overflow:hidden;border:0;box-shadow:0 1px 8px rgba(0,0,0,.12)}
+.map-frame{width:100%;height:100%;min-height:520px;border-radius:16px;overflow:hidden;border:0;box-shadow:none}
 
 /* Sidebar básica */
-.side-card{background:#12202b;border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:14px 14px;color:#e1eef6;margin-bottom:12px}
+.side-card{background:rgba(18,34,49,.96);border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:18px;color:#e1eef6;margin-bottom:16px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.02)}
 .side-title{font-weight:700;margin-bottom:.5rem}
 .side-card .form-control{background:#0f1a23;border:1px solid #24333b;color:#e7eff6}
 .side-card .form-control::placeholder{color:#7f98a2}
 
 .side-card .input-group>.form-control{border-top-left-radius:10px;border-bottom-left-radius:10px}
 .side-card .input-group .btn{border-top-right-radius:10px;border-bottom-right-radius:10px}
+.routes-list{max-height:220px;overflow:auto;padding-left:0;margin-bottom:0}
+.routes-list li{background:rgba(10,26,38,.92);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:10px 12px;margin-bottom:10px;display:flex;flex-direction:column;gap:6px}
+.routes-list li .route-meta{font-size:.78rem;color:#92a4b4}
+.routes-list li .btn-group{display:flex;gap:6px}
+.extra-hint{font-size:.75rem;margin-top:8px}
 
-/* Panel lateral sobre el mapa */
-/* Panel lateral fijo a un lado del mapa */
-.side-panel{width:var(--sidebar);max-width:90vw;max-height:70vh;overflow:auto;padding-right:2px}
-.map-column{border-left:1px solid rgba(255,255,255,.08);padding-left:12px}
-.side-panel::-webkit-scrollbar{width:10px}
-.side-panel::-webkit-scrollbar-track{background:transparent;border-radius:10px}
-.side-panel::-webkit-scrollbar-thumb{background:#22313d;border-radius:10px}
-@media (max-width: 768px){
-	.side-panel{width:100%;max-height:none}
-	.map-column{border-left:0;padding-left:0}
-}
-
-/* Controles superiores del mapa (Regresar / Ubicar) */
-.map-controls{position:absolute;top:10px;left:10px;right:10px;z-index:1300;display:flex;justify-content:space-between;align-items:center;gap:12px;pointer-events:none}
-.map-controls .btn{pointer-events:auto}
-/* Cuando el panel es lateral (no overlay), no desplazamos los controles */
-.with-side-panel .map-controls .left-controls{margin-left:0}
-
-/* Barra de búsqueda flotante */
+/* Barra de búsqueda flotante (reservado para futuras iteraciones) */
 .floating-search{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:1000;width:min(720px,92%)}
 .floating-search .form-control{padding:.75rem 1rem;border-radius:999px;border:1px solid #e6e6e6}
 
-/* FABs */
+/* FABs (opcional) */
 .fab-group{position:absolute;right:16px;bottom:120px;display:flex;flex-direction:column;gap:12px;z-index:1000}
 .fab{width:48px;height:48px;border-radius:50%;border:none;background:#fff;color:#333;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.2);cursor:pointer}
 .fab:active{transform:scale(.98)}
 .fab-accent{background:var(--accent);color:#fff}
 
-/* Panel inferior tipo bottom-sheet */
+/* Panel inferior tipo bottom-sheet (opcional) */
 .bottom-sheet{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);width:min(720px,92%);background:var(--card);color:var(--text);border-radius:16px;padding:12px 16px}
 .sheet-title{font-weight:700}
 .sheet-subtitle{font-size:.9rem;color:#e0e0e0}
 
-/* Ajustes Leaflet para estilo oscuro si se usa base dark */
+/* Ajustes Leaflet */
 .leaflet-control-zoom a{border-radius:8px}

@@ -12,6 +12,9 @@
     // Opcional: endpoint relativo para notificar/configurar el backend
     modelEndpoint: '/api/set-model',
     // Beta: permitir login sin registro previo
-    betaAllowAnyLogin: true
+    // Debe permanecer en false para obligar a usar la API real (MySQL)
+    betaAllowAnyLogin: false,
+    // Base URL de la API local (Express) que corre dentro de Electron
+    apiBaseUrl: 'http://localhost:4799/api'
   };
 })();

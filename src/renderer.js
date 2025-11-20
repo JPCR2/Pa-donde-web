@@ -9,6 +9,11 @@ window.addEventListener('DOMContentLoaded', () => {
   const emailInput = document.getElementById('login-email');
   const passwordInput = document.getElementById('login-password');
 
+  const routeNameInput = document.getElementById('route-name-input');
+  const saveRouteBtn = document.getElementById('btn-save-route');
+  const refreshRoutesBtn = document.getElementById('btn-refresh-routes');
+  const routesList = document.getElementById('routes-list');
+
   // Map state
   let mapInitialized = false;
   let map = null;
@@ -38,7 +43,10 @@ window.addEventListener('DOMContentLoaded', () => {
   const finishBtn = document.getElementById('finish-route');
   const clearBtn = document.getElementById('clear-route');
   const locateBtn = document.getElementById('locate-btn');
-  const backLoginBtn = document.getElementById('btn-back-login');
+  const logoutBtn = document.getElementById('btn-logout');
+
+  const API_BASE_URL = (window.APP_CONFIG && window.APP_CONFIG.apiBaseUrl) || 'http://localhost:4799/api';
+  let editingRouteId = null;
 
   function initMap() {
     if (mapInitialized) return;
@@ -157,6 +165,113 @@ window.addEventListener('DOMContentLoaded', () => {
     infoEl.textContent = `Distancia: ${display}`;
   }
 
+  function resetRouteForm() {
+    if (routeNameInput) routeNameInput.value = '';
+    editingRouteId = null;
+    if (saveRouteBtn) saveRouteBtn.textContent = 'Guardar ruta';
+  }
+
+  async function apiRequest(path, options = {}) {
+    const url = path.startsWith('http') ? path : `${API_BASE_URL}${path}`;
+    const opts = {
+      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+      ...options,
+    };
+    if (opts.body && typeof opts.body !== 'string') {
+      opts.body = JSON.stringify(opts.body);
+    }
+    const response = await fetch(url, opts);
+    if (!response.ok) {
+      let detail = `Error HTTP ${response.status}`;
+      try {
+        const raw = await response.text();
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object' && parsed.message) {
+              detail = parsed.message;
+            } else {
+              detail = raw;
+            }
+          } catch (_jsonError) {
+            detail = raw;
+          }
+        }
+      } catch (_readError) {
+        /* ignore read errors */
+      }
+      throw new Error(detail);
+    }
+    if (response.status === 204) return null;
+    return response.json();
+  }
+
+  function renderRoutes(list) {
+    if (!routesList) return;
+    routesList.innerHTML = '';
+    if (!Array.isArray(list) || list.length === 0) {
+      routesList.innerHTML = '<li class="text-muted">No hay rutas guardadas todavía.</li>';
+      return;
+    }
+
+    list.forEach((route) => {
+      const item = document.createElement('li');
+      item.dataset.id = route.id;
+      item.dataset.name = route.name || '';
+      item.dataset.originLat = route.origin_lat ?? '';
+      item.dataset.originLng = route.origin_lng ?? '';
+      item.dataset.destLat = route.dest_lat ?? '';
+      item.dataset.destLng = route.dest_lng ?? '';
+
+      const title = document.createElement('div');
+      title.textContent = route.name || `Ruta ${route.id}`;
+      title.className = 'fw-semibold';
+
+      const meta = document.createElement('div');
+      meta.className = 'route-meta';
+      const originText = route.origin_lat && route.origin_lng
+        ? `${Number(route.origin_lat).toFixed(4)}, ${Number(route.origin_lng).toFixed(4)}`
+        : 'sin origen';
+      const destText = route.dest_lat && route.dest_lng
+        ? `${Number(route.dest_lat).toFixed(4)}, ${Number(route.dest_lng).toFixed(4)}`
+        : 'sin destino';
+      meta.textContent = `Origen: ${originText} · Destino: ${destText}`;
+
+      const btnGroup = document.createElement('div');
+      btnGroup.className = 'btn-group';
+
+      const editBtn = document.createElement('button');
+      editBtn.className = 'btn btn-outline-light btn-sm';
+      editBtn.type = 'button';
+      editBtn.dataset.action = 'edit';
+      editBtn.dataset.id = route.id;
+      editBtn.textContent = 'Editar';
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'btn btn-outline-danger btn-sm';
+      deleteBtn.type = 'button';
+      deleteBtn.dataset.action = 'delete';
+      deleteBtn.dataset.id = route.id;
+      deleteBtn.textContent = 'Eliminar';
+
+      btnGroup.append(editBtn, deleteBtn);
+      item.append(title, meta, btnGroup);
+      routesList.append(item);
+    });
+  }
+
+  async function loadRoutes() {
+    try {
+      const data = await apiRequest('/routes');
+      renderRoutes(data);
+    } catch (error) {
+      console.error('No se pudieron cargar las rutas', error);
+      if (routesList) {
+        routesList.innerHTML = `<li class="text-danger">Error al cargar rutas: ${error.message}</li>`;
+      }
+    }
+  }
+
   // Botones de control de ruta
   if (startBtn) {
     startBtn.addEventListener('click', () => {
@@ -184,18 +299,111 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Botón Regresar: volver al login y limpiar sesión/estado
-  if (backLoginBtn) {
-    backLoginBtn.addEventListener('click', () => {
-      try { localStorage.removeItem('padondep_currentUser'); } catch {}
+  if (refreshRoutesBtn) {
+    refreshRoutesBtn.addEventListener('click', () => {
+      loadRoutes();
+    });
+  }
+
+  if (routesList) {
+    routesList.addEventListener('click', (event) => {
+      const target = event.target;
+      const action = target.dataset.action;
+      const id = target.dataset.id;
+      if (!action || !id) return;
+
+      const parent = target.closest('li');
+      if (!parent) return;
+
+      if (action === 'edit') {
+        editingRouteId = Number(id);
+        if (routeNameInput) routeNameInput.value = parent.dataset.name || '';
+
+        const oLat = parseFloat(parent.dataset.originLat);
+        const oLng = parseFloat(parent.dataset.originLng);
+        const dLat = parseFloat(parent.dataset.destLat);
+        const dLng = parseFloat(parent.dataset.destLng);
+
+        if (!Number.isNaN(oLat) && !Number.isNaN(oLng)) {
+          originLatLng = L.latLng(oLat, oLng);
+          if (originMarker) map.removeLayer(originMarker);
+          if (map) {
+            originMarker = L.circleMarker(originLatLng, { radius: 7, color: '#4caf50', fillColor: '#4caf50', fillOpacity: 0.95 }).addTo(map);
+            map.panTo(originLatLng);
+          }
+          if (originInput) originInput.value = `${oLat.toFixed(5)}, ${oLng.toFixed(5)}`;
+        }
+        if (!Number.isNaN(dLat) && !Number.isNaN(dLng)) {
+          destLatLng = L.latLng(dLat, dLng);
+          if (destMarker) map.removeLayer(destMarker);
+          if (map) {
+            destMarker = L.circleMarker(destLatLng, { radius: 7, color: '#f44336', fillColor: '#f44336', fillOpacity: 0.95 }).addTo(map);
+            map.panTo(destLatLng);
+          }
+          if (destInput) destInput.value = `${dLat.toFixed(5)}, ${dLng.toFixed(5)}`;
+        }
+        calcPlannedRoute();
+        if (saveRouteBtn) saveRouteBtn.textContent = 'Actualizar ruta';
+      } else if (action === 'delete') {
+        if (confirm('¿Eliminar esta ruta definitivamente?')) {
+          apiRequest(`/routes/${id}`, { method: 'DELETE' })
+            .then(() => {
+              if (Number(editingRouteId) === Number(id)) {
+                resetRouteForm();
+              }
+              loadRoutes();
+            })
+            .catch((error) => alert(`No se pudo eliminar: ${error.message}`));
+        }
+      }
+    });
+  }
+
+  if (saveRouteBtn) {
+    saveRouteBtn.addEventListener('click', async () => {
+      if (!map) initMap();
+      const name = routeNameInput && routeNameInput.value.trim();
+      if (!name) {
+        alert('Escribe el nombre de la ruta.');
+        return;
+      }
+
+      const originCandidate = originLatLng || routePoints[0] || null;
+      const destCandidate = destLatLng || routePoints[routePoints.length - 1] || null;
+
+      const payload = {
+        name,
+        originLat: originCandidate ? originCandidate.lat : null,
+        originLng: originCandidate ? originCandidate.lng : null,
+        destLat: destCandidate ? destCandidate.lat : null,
+        destLng: destCandidate ? destCandidate.lng : null,
+      };
+
+      try {
+        if (editingRouteId) {
+          await apiRequest(`/routes/${editingRouteId}`, { method: 'PUT', body: payload });
+        } else {
+          await apiRequest('/routes', { method: 'POST', body: payload });
+        }
+        resetRouteForm();
+        loadRoutes();
+      } catch (error) {
+        alert(`No se pudo guardar la ruta: ${error.message}`);
+      }
+    });
+  }
+
+  // Botón Cerrar sesión: volver al login y limpiar sesión/estado
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', () => {
+      setCurrentUser(null);
       // Limpiar UI del mapa básica
       if (routeLine) { map && map.removeLayer(routeLine); routeLine = null; }
       routeMarkers.forEach(m => map && map.removeLayer(m));
       routeMarkers = [];
       routePoints = [];
       // Ocultar mapa y mostrar login
-      mapScreen.style.display = 'none';
-      loginScreen.style.display = 'block';
+      showScreen('login-screen');
     });
   }
 
@@ -248,10 +456,10 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   // Login form handling
-  loginForm.addEventListener('submit', (event) => {
+  loginForm.addEventListener('submit', async (event) => {
     event.preventDefault();
 
-    const email = emailInput.value && emailInput.value.trim();
+    const email = emailInput.value && emailInput.value.trim().toLowerCase();
     const password = passwordInput.value && passwordInput.value.trim();
 
     if (!email || !password) {
@@ -260,34 +468,26 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 
     const cfg = window.APP_CONFIG || {};
-    let allow = false;
     if (cfg.betaAllowAnyLogin) {
-      allow = true; // beta: permitir cualquier correo/contraseña
-    } else {
-      // Validar contra usuarios registrados (localStorage)
-      const users = JSON.parse(localStorage.getItem('padondep_users') || '[]');
-      const user = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
-      if (user) {
-        // Guardar sesión simple
-        localStorage.setItem('padondep_currentUser', JSON.stringify({ name: user.name, email: user.email }));
-        allow = true;
-      }
-    }
-    if (!allow) {
-      alert('Credenciales inválidas. Si no tienes cuenta, regístrate.');
+      enterMapSession({ email, firstName: email.split('@')[0] || 'Usuario beta' });
       return;
     }
 
-    loginScreen.style.display = 'none';
-    mapScreen.style.display = 'block';
-
-    setTimeout(() => {
-      initMap();
-      // enable start button when map is ready
-      if (startBtn) startBtn.disabled = false;
-      // Aplicar feature-flag: notificar al backend (si existe) la preferencia de modelo
-      applyModelPreference();
-    }, 50);
+    try {
+      const response = await apiRequest('/auth/login', {
+        method: 'POST',
+        body: { email, password },
+      });
+      const user = response && response.user ? response.user : null;
+      if (!user) {
+        throw new Error('Respuesta inesperada del servidor');
+      }
+      enterMapSession(user);
+    } catch (error) {
+      alert(`No se pudo iniciar sesión: ${error.message}`);
+    } finally {
+      if (passwordInput) passwordInput.value = '';
+    }
   });
 
   // --- Registro de usuarios (UI y lógica) ---
@@ -295,17 +495,21 @@ window.addEventListener('DOMContentLoaded', () => {
   const registerScreen = document.getElementById('register-screen');
   const registerForm = document.getElementById('register-form');
   const regName = document.getElementById('reg-name');
+  const regLastName = document.getElementById('reg-lastname');
   const regEmail = document.getElementById('reg-email');
   const regPassword = document.getElementById('reg-password');
   const regPasswordConfirm = document.getElementById('reg-password-confirm');
   const registerBack = document.getElementById('register-back');
+  const loginCloseButton = document.getElementById('login-close');
 
   function showScreen(id) {
     // hide all
     [loginScreen, registerScreen, mapScreen].forEach(el => { if (el) el.style.display = 'none'; });
     // show selected
     const el = document.getElementById(id);
-    if (el) el.style.display = 'block';
+    if (el) el.style.display = id === 'map-screen' ? 'flex' : 'block';
+    if (id === 'map-screen') document.body.classList.add('map-active');
+    else document.body.classList.remove('map-active');
   }
 
   if (showRegisterLink) {
@@ -321,23 +525,68 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  function getUsers() {
-    return JSON.parse(localStorage.getItem('padondep_users') || '[]');
+  if (loginCloseButton) {
+    loginCloseButton.addEventListener('click', () => {
+      window.close?.();
+    });
   }
 
-  function saveUsers(users) {
-    localStorage.setItem('padondep_users', JSON.stringify(users));
+  function buildDisplayName(user) {
+    if (!user) return 'Invitado';
+    const first = (user.firstName || user.name || '').trim();
+    const last = (user.lastName || '').trim();
+    const combined = `${first} ${last}`.trim();
+    if (combined) return combined;
+    if (user.email) return user.email.split('@')[0];
+    return 'Invitado';
+  }
+
+  function setCurrentUser(user) {
+    if (!user) {
+      try { localStorage.removeItem('padondep_currentUser'); } catch (error) {
+        console.warn('No se pudo limpiar la sesión:', error.message);
+      }
+      return;
+    }
+    const payload = {
+      id: user.id ?? null,
+      email: user.email ?? null,
+      firstName: user.firstName ?? null,
+      lastName: user.lastName ?? null,
+      name: user.name ?? buildDisplayName(user),
+    };
+    try {
+      localStorage.setItem('padondep_currentUser', JSON.stringify(payload));
+    } catch (error) {
+      console.warn('No se pudo persistir la sesión:', error.message);
+    }
+  }
+
+  function enterMapSession(user) {
+    setCurrentUser(user);
+    showScreen('map-screen');
+    setTimeout(() => {
+      initMap();
+      if (startBtn) startBtn.disabled = false;
+      applyModelPreference();
+      loadRoutes();
+    }, 50);
+  }
+
+  function resetRegisterFormFields() {
+    if (registerForm) registerForm.reset();
   }
 
   if (registerForm) {
-    registerForm.addEventListener('submit', (e) => {
+    registerForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const name = regName.value && regName.value.trim();
+      const firstName = regName.value && regName.value.trim();
+      const lastName = regLastName && regLastName.value ? regLastName.value.trim() : '';
       const email = regEmail.value && regEmail.value.trim().toLowerCase();
       const pass = regPassword.value && regPassword.value;
       const pass2 = regPasswordConfirm.value && regPasswordConfirm.value;
 
-      if (!name || !email || !pass || !pass2) {
+      if (!firstName || !email || !pass || !pass2) {
         alert('Por favor completa todos los campos.');
         return;
       }
@@ -346,24 +595,37 @@ window.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      const users = getUsers();
-      if (users.find(u => u.email.toLowerCase() === email)) {
-        alert('Ya existe una cuenta con ese correo.');
+      const cfg = window.APP_CONFIG || {};
+      if (cfg.betaAllowAnyLogin) {
+        enterMapSession({ firstName, lastName, email });
+        resetRegisterFormFields();
+        if (regPassword) regPassword.value = '';
+        if (regPasswordConfirm) regPasswordConfirm.value = '';
         return;
       }
 
-      // Crear usuario (en localStorage para demo)
-      users.push({ name, email, password: pass });
-      saveUsers(users);
-
-      // Auto-login tras registro
-      localStorage.setItem('padondep_currentUser', JSON.stringify({ name, email }));
-      showScreen('map-screen');
-      setTimeout(() => {
-        initMap();
-        if (startBtn) startBtn.disabled = false;
-        applyModelPreference();
-      }, 50);
+      try {
+        const response = await apiRequest('/users', {
+          method: 'POST',
+          body: {
+            firstName,
+            lastName,
+            email,
+            password: pass,
+          },
+        });
+        const user = response && response.user ? response.user : null;
+        if (!user) {
+          throw new Error('Respuesta inesperada del servidor');
+        }
+        enterMapSession(user);
+        resetRegisterFormFields();
+      } catch (error) {
+        alert(`No se pudo registrar el usuario: ${error.message}`);
+      } finally {
+        if (regPassword) regPassword.value = '';
+        if (regPasswordConfirm) regPasswordConfirm.value = '';
+      }
     });
   }
 
