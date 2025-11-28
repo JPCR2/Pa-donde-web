@@ -49,3 +49,7 @@ node -e "const srv=require('./src/backend/server'); const instance=srv(); setTim
 ```
 
 Revisa la consola para asegurarte de que no hay errores al inicializar la conexión MySQL ni al cargar OSRM.
+
+## Corrección
+Se hizo la corrección del CRUD , lo cual falto el de Actualizar y el de Eliminar.
+Se agrego junto con la base de datos para que nos pueda dejar ya sea en el electron y en la base de datos poder realizar el CRUD.
