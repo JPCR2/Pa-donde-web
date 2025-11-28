@@ -52,4 +52,5 @@ Revisa la consola para asegurarte de que no hay errores al inicializar la conexi
 
 ## Corrección
 Se hizo la corrección del CRUD , lo cual falto el de Actualizar y el de Eliminar.
-Se agrego junto con la base de datos para que nos pueda dejar ya sea en el electron y en la base de datos poder realizar el CRUD.
+Se agrego junto con la base de datos para que nos pueda dejar ya sea en el electron y en la base de datos poder realizar el CRUD
+que los cambios estan en el archivo de server.js.
