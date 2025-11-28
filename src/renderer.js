@@ -37,6 +37,7 @@ window.addEventListener('DOMContentLoaded', () => {
   let originMarker = null;
   let destMarker = null;
   let planLine = null;
+  let lastOsrmResult = null;
 
   // Controles del DOM para rutas y UI
   const startBtn = document.getElementById('start-route');
@@ -44,9 +45,65 @@ window.addEventListener('DOMContentLoaded', () => {
   const clearBtn = document.getElementById('clear-route');
   const locateBtn = document.getElementById('locate-btn');
   const logoutBtn = document.getElementById('btn-logout');
+  const menuButton = document.getElementById('layout-menu');
+  const accountDrawer = document.getElementById('account-drawer');
+  const accountDrawerBackdrop = document.getElementById('account-drawer-backdrop');
+  const accountDrawerClose = document.getElementById('account-drawer-close');
+  const passwordForm = document.getElementById('account-password-form');
+  const passwordToggleBtn = document.getElementById('toggle-password-form');
+  const passwordCancelBtn = document.getElementById('password-cancel');
+  const passwordSubmitBtn = document.getElementById('password-submit-btn');
+  const passwordFeedback = document.getElementById('password-feedback');
+  const deleteAccountBtn = document.getElementById('delete-account-btn');
+  const accountFields = {
+    firstName: document.getElementById('account-first-name'),
+    lastOne: document.getElementById('account-lastname-1'),
+    lastTwo: document.getElementById('account-lastname-2'),
+    email: document.getElementById('account-email'),
+  };
+  const passwordInputs = {
+    current: document.getElementById('current-password'),
+    next: document.getElementById('new-password'),
+    confirm: document.getElementById('confirm-password'),
+  };
 
   const API_BASE_URL = (window.APP_CONFIG && window.APP_CONFIG.apiBaseUrl) || 'http://localhost:4799/api';
   let editingRouteId = null;
+
+  const formatDistance = (meters) => {
+    if (typeof meters !== 'number' || Number.isNaN(meters)) return '0 m';
+    if (meters < 1000) return `${Math.round(meters)} m`;
+    return `${(meters / 1000).toFixed(2)} km`;
+  };
+
+  const formatDuration = (seconds) => {
+    if (typeof seconds !== 'number' || Number.isNaN(seconds)) return null;
+    const totalMinutes = Math.round(seconds / 60);
+    if (totalMinutes < 60) return `${totalMinutes} min`;
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    if (minutes === 0) return `${hours} h`;
+    return `${hours} h ${minutes} min`;
+  };
+
+  const setRouteInfo = ({ distance, duration } = {}) => {
+    const infoEl = document.getElementById('route-info');
+    if (!infoEl) return;
+
+    const distanceText = typeof distance === 'number' ? formatDistance(distance) : null;
+    const durationText = typeof duration === 'number' ? formatDuration(duration) : null;
+
+    if (!distanceText && !durationText) {
+      infoEl.textContent = 'Distancia: 0 m';
+      return;
+    }
+
+    let message = distanceText ? `Distancia: ${distanceText}` : '';
+    if (durationText) {
+      message = message ? `${message} · Duración: ${durationText}` : `Duración: ${durationText}`;
+    }
+    infoEl.textContent = message || 'Distancia: 0 m';
+  };
 
   function initMap() {
     if (mapInitialized) return;
@@ -63,8 +120,14 @@ window.addEventListener('DOMContentLoaded', () => {
       attribution: '&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a>, &copy; <a href="https://carto.com/attributions">CARTO</a>'
     }).addTo(map);
 
-  // Marcador inicial
-  L.marker(defaultLatLng).addTo(map).bindPopup('Playa del Carmen').openPopup();
+  // Marcador inicial personalizado para evitar ícono roto
+  L.circleMarker(defaultLatLng, {
+    radius: 9,
+    color: '#00e5ff',
+    fillColor: '#00e5ff',
+    fillOpacity: 0.95,
+    weight: 2,
+  }).addTo(map).bindPopup('Playa del Carmen').openPopup();
 
     // Click en mapa: seleccionar origen/destino o añadir puntos si está el modo dibujo
     map.on('click', (e) => {
@@ -98,17 +161,48 @@ window.addEventListener('DOMContentLoaded', () => {
     if (calcRouteBtn) calcRouteBtn.disabled = !(originLatLng && destLatLng);
   }
 
-  function calcPlannedRoute() {
+  async function calcPlannedRoute() {
     if (!originLatLng || !destLatLng) return;
-    if (planLine) { map.removeLayer(planLine); planLine = null; }
-    planLine = L.polyline([originLatLng, destLatLng], { color: '#ff6d00', weight: 5, dashArray: '6,6' }).addTo(map);
-    map.fitBounds(planLine.getBounds(), { padding: [30, 30] });
 
-    const infoEl = document.getElementById('route-info');
-    if (infoEl) {
-      const dist = L.latLng(originLatLng).distanceTo(L.latLng(destLatLng));
-      const txt = dist < 1000 ? `${Math.round(dist)} m` : `${(dist/1000).toFixed(2)} km`;
-      infoEl.textContent = `Distancia: ${txt}`;
+    const originParam = `${originLatLng.lat},${originLatLng.lng}`;
+    const destParam = `${destLatLng.lat},${destLatLng.lng}`;
+
+    if (planLine) {
+      map.removeLayer(planLine);
+      planLine = null;
+    }
+
+    lastOsrmResult = null;
+    setRouteInfo();
+    const routeInfoEl = document.getElementById('route-info');
+    if (routeInfoEl) routeInfoEl.textContent = 'Calculando ruta...';
+
+    try {
+      const data = await apiRequest(`/osrm-route?origin=${encodeURIComponent(originParam)}&dest=${encodeURIComponent(destParam)}`);
+      if (!data || !data.geometry || !Array.isArray(data.geometry.coordinates)) {
+        throw new Error('Respuesta de OSRM inválida');
+      }
+
+      const coords = data.geometry.coordinates
+        .filter((pair) => Array.isArray(pair) && pair.length === 2)
+        .map(([lng, lat]) => [lat, lng]);
+
+      if (coords.length === 0) {
+        throw new Error('OSRM no devolvió puntos de ruta.');
+      }
+
+      lastOsrmResult = data;
+      planLine = L.polyline(coords, { color: '#ff6d00', weight: 5 }).addTo(map);
+      map.fitBounds(planLine.getBounds(), { padding: [30, 30] });
+      setRouteInfo({ distance: data.distance, duration: data.duration });
+    } catch (error) {
+      console.error('No se pudo calcular ruta OSRM:', error);
+      alert(`No se pudo calcular la ruta: ${error.message || error}`);
+      setRouteInfo();
+      if (planLine) {
+        map.removeLayer(planLine);
+        planLine = null;
+      }
     }
   }
 
@@ -134,7 +228,12 @@ window.addEventListener('DOMContentLoaded', () => {
       map.removeLayer(routeLine);
       routeLine = null;
     }
-    updateDistanceInfo();
+    if (planLine) {
+      map.removeLayer(planLine);
+      planLine = null;
+    }
+    lastOsrmResult = null;
+    setRouteInfo();
     // Reset buttons
     startBtn.disabled = false;
     finishBtn.disabled = true;
@@ -143,11 +242,8 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   function updateDistanceInfo() {
-    const infoEl = document.getElementById('route-info');
-    if (!infoEl) return;
-
     if (routePoints.length < 2) {
-      infoEl.textContent = 'Distancia: 0 m';
+      setRouteInfo();
       return;
     }
 
@@ -157,12 +253,7 @@ window.addEventListener('DOMContentLoaded', () => {
       const b = L.latLng(routePoints[i]);
       total += a.distanceTo(b);
     }
-
-    let display = '';
-    if (total < 1000) display = `${Math.round(total)} m`;
-    else display = `${(total / 1000).toFixed(2)} km`;
-
-    infoEl.textContent = `Distancia: ${display}`;
+    setRouteInfo({ distance: total });
   }
 
   function resetRouteForm() {
@@ -306,7 +397,7 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   if (routesList) {
-    routesList.addEventListener('click', (event) => {
+    routesList.addEventListener('click', async (event) => {
       const target = event.target;
       const action = target.dataset.action;
       const id = target.dataset.id;
@@ -342,7 +433,7 @@ window.addEventListener('DOMContentLoaded', () => {
           }
           if (destInput) destInput.value = `${dLat.toFixed(5)}, ${dLng.toFixed(5)}`;
         }
-        calcPlannedRoute();
+        await calcPlannedRoute();
         if (saveRouteBtn) saveRouteBtn.textContent = 'Actualizar ruta';
       } else if (action === 'delete') {
         if (confirm('¿Eliminar esta ruta definitivamente?')) {
@@ -407,6 +498,99 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  if (menuButton) {
+    menuButton.addEventListener('click', () => {
+      openAccountDrawer();
+    });
+  }
+
+  const drawerCloseTargets = [accountDrawerBackdrop, accountDrawerClose];
+  drawerCloseTargets.forEach((el) => {
+    if (!el) return;
+    el.addEventListener('click', () => {
+      closeAccountDrawer();
+    });
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && accountDrawer?.classList.contains('open')) {
+      closeAccountDrawer();
+    }
+  });
+
+  if (passwordToggleBtn) {
+    passwordToggleBtn.addEventListener('click', () => togglePasswordForm());
+  }
+
+  if (passwordCancelBtn) {
+    passwordCancelBtn.addEventListener('click', () => togglePasswordForm(true));
+  }
+
+  if (passwordForm) {
+    passwordForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const current = passwordInputs.current?.value?.trim();
+      const next = passwordInputs.next?.value?.trim();
+      const confirm = passwordInputs.confirm?.value?.trim();
+      if (!current || !next || !confirm) {
+        showPasswordFeedback('Completa todos los campos.', 'error');
+        return;
+      }
+      if (next.length < 8) {
+        showPasswordFeedback('La nueva contraseña debe tener al menos 8 caracteres.', 'error');
+        return;
+      }
+      if (next !== confirm) {
+        showPasswordFeedback('La confirmación no coincide.', 'error');
+        return;
+      }
+
+      const currentUser = getCurrentUser();
+      if (!currentUser || !currentUser.id) {
+        showPasswordFeedback('Inicia sesión nuevamente.', 'error');
+        return;
+      }
+
+      if (passwordSubmitBtn) passwordSubmitBtn.disabled = true;
+      showPasswordFeedback('Actualizando contraseña...', '');
+
+      try {
+        await apiRequest(`/users/${currentUser.id}/password`, {
+          method: 'PUT',
+          body: { currentPassword: current, newPassword: next },
+        });
+        showPasswordFeedback('Contraseña actualizada correctamente.', 'success');
+        passwordForm.reset();
+        setTimeout(() => togglePasswordForm(true), 1200);
+      } catch (error) {
+        showPasswordFeedback(error.message || 'No se pudo actualizar la contraseña.', 'error');
+      } finally {
+        if (passwordSubmitBtn) passwordSubmitBtn.disabled = false;
+      }
+    });
+  }
+
+  if (deleteAccountBtn) {
+    deleteAccountBtn.addEventListener('click', async () => {
+      const currentUser = getCurrentUser();
+      if (!currentUser || !currentUser.id) {
+        alert('Inicia sesión nuevamente.');
+        return;
+      }
+      const confirmation = confirm('¿Eliminar cuenta y cerrar sesión? No podrás revertirlo.');
+      if (!confirmation) return;
+      try {
+        await apiRequest(`/users/${currentUser.id}`, { method: 'DELETE' });
+        alert('Cuenta eliminada.');
+        closeAccountDrawer();
+        setCurrentUser(null);
+        showScreen('login-screen');
+      } catch (error) {
+        alert(`No se pudo eliminar la cuenta: ${error.message}`);
+      }
+    });
+  }
+
   // Selección de origen/destino y cálculo
   if (selectOriginBtn) {
     selectOriginBtn.addEventListener('click', () => {
@@ -423,9 +607,14 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
   if (calcRouteBtn) {
-    calcRouteBtn.addEventListener('click', () => {
+    calcRouteBtn.addEventListener('click', async () => {
       if (!map) initMap();
-      calcPlannedRoute();
+      calcRouteBtn.disabled = true;
+      try {
+        await calcPlannedRoute();
+      } finally {
+        maybeEnableCalc();
+      }
     });
   }
 
@@ -541,12 +730,53 @@ window.addEventListener('DOMContentLoaded', () => {
     return 'Invitado';
   }
 
+  function getCurrentUser() {
+    try {
+      const raw = localStorage.getItem('padondep_currentUser');
+      return raw ? JSON.parse(raw) : null;
+    } catch (error) {
+      console.warn('No se pudo leer la sesión del usuario:', error.message);
+      return null;
+    }
+  }
+
+  function refreshAccountDrawer(userOverride = null) {
+    const data = userOverride || getCurrentUser();
+    const placeholders = {
+      default: '--------------------------',
+      email: 'correo@pendiente.com',
+    };
+    const setValue = (input, value, fallbackKey = 'default') => {
+      if (!input) return;
+      const fallback = placeholders[fallbackKey] || placeholders.default;
+      const sanitized = value && value.trim ? value.trim() : value;
+      input.value = sanitized || fallback;
+    };
+
+    if (!data) {
+      Object.entries(accountFields).forEach(([key, input]) => {
+        const fallbackKey = key === 'email' ? 'email' : 'default';
+        setValue(input, '', fallbackKey);
+      });
+      return;
+    }
+
+    const lastParts = (data.lastName || '').trim().split(/\s+/).filter(Boolean);
+    setValue(accountFields.firstName, data.firstName || data.name || '', 'default');
+    setValue(accountFields.lastOne, lastParts[0] || '', 'default');
+    setValue(accountFields.lastTwo, lastParts[1] || '', 'default');
+    setValue(accountFields.email, data.email || '', 'email');
+  }
+
+  refreshAccountDrawer();
+
   function setCurrentUser(user) {
     if (!user) {
       try { localStorage.removeItem('padondep_currentUser'); } catch (error) {
         console.warn('No se pudo limpiar la sesión:', error.message);
       }
-      return;
+      refreshAccountDrawer(null);
+      return null;
     }
     const payload = {
       id: user.id ?? null,
@@ -560,6 +790,51 @@ window.addEventListener('DOMContentLoaded', () => {
     } catch (error) {
       console.warn('No se pudo persistir la sesión:', error.message);
     }
+    refreshAccountDrawer(payload);
+    return payload;
+  }
+
+  function openAccountDrawer() {
+    if (!accountDrawer) return;
+    refreshAccountDrawer();
+    accountDrawer.classList.add('open');
+    accountDrawer.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('drawer-open');
+  }
+
+  function closeAccountDrawer() {
+    if (!accountDrawer) return;
+    accountDrawer.classList.remove('open');
+    accountDrawer.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('drawer-open');
+    if (passwordForm) {
+      passwordForm.classList.add('is-hidden');
+      passwordForm.reset?.();
+    }
+    if (passwordToggleBtn) passwordToggleBtn.textContent = 'Cambiar contraseña';
+    showPasswordFeedback();
+  }
+
+  function showPasswordFeedback(message = '', status = '') {
+    if (!passwordFeedback) return;
+    passwordFeedback.textContent = message || '';
+    passwordFeedback.classList.remove('error', 'success');
+    if (status) passwordFeedback.classList.add(status);
+  }
+
+  function togglePasswordForm(forceClose = false) {
+    if (!passwordForm) return;
+    const shouldClose = forceClose || !passwordForm.classList.contains('is-hidden');
+    if (shouldClose) {
+      passwordForm.classList.add('is-hidden');
+      passwordForm.reset?.();
+      showPasswordFeedback();
+      if (passwordToggleBtn) passwordToggleBtn.textContent = 'Cambiar contraseña';
+      return;
+    }
+    passwordForm.classList.remove('is-hidden');
+    if (passwordToggleBtn) passwordToggleBtn.textContent = 'Ocultar formulario';
+    passwordInputs.current?.focus();
   }
 
   function enterMapSession(user) {

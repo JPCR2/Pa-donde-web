@@ -102,3 +102,60 @@ body.map-active .app-main{max-width:none;width:100%;padding:0}
 
 /* Ajustes Leaflet */
 .leaflet-control-zoom a{border-radius:8px}
+
+/* ---------- PANEL DE CONFIGURACIÓN ---------- */
+body.drawer-open{overflow:hidden}
+
+.account-drawer{position:fixed;inset:0;z-index:2200;pointer-events:none}
+.account-drawer__backdrop{position:absolute;inset:0;background:rgba(0,0,0,.6);opacity:0;transition:opacity .25s ease}
+.account-drawer__panel{position:absolute;top:0;left:0;height:100%;width:min(960px,94vw);background:#071623;border-right:1px solid rgba(255,255,255,.08);box-shadow:0 20px 60px rgba(0,0,0,.45);padding:28px 32px 32px;transform:translateX(-40px);opacity:0;transition:transform .3s ease,opacity .25s ease;border-radius:0 26px 26px 0;display:flex;flex-direction:column;gap:26px}
+.account-drawer.open{pointer-events:auto}
+.account-drawer.open .account-drawer__backdrop{opacity:1}
+.account-drawer.open .account-drawer__panel{transform:translateX(0);opacity:1}
+
+.account-drawer__header{display:flex;align-items:center;justify-content:space-between}
+.drawer-kicker{font-size:.85rem;color:#6bd7af;margin:0 0 4px;font-weight:600;text-transform:uppercase;letter-spacing:.08em}
+.drawer-title{color:#fff;font-size:1.6rem;margin:0}
+.icon-button--solid{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);position:relative;gap:0;justify-content:center;align-items:center}
+.icon-button--solid span{position:absolute;width:20px;height:2px;background:#fff;border-radius:1px}
+.icon-button--solid span:first-child{transform:rotate(45deg)}
+.icon-button--solid span:last-child{transform:rotate(-45deg)}
+
+.account-drawer__grid{display:grid;grid-template-columns:220px 1fr;gap:26px;height:100%}
+.settings-nav{background:#0a2234;border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:12px}
+.settings-nav-btn{border:0;border-radius:12px;padding:12px 14px;text-align:left;font-weight:600;font-size:.95rem;background:rgba(255,255,255,.04);color:#cfe8ff;transition:background .2s ease}
+.settings-nav-btn:disabled{opacity:.35;cursor:not-allowed}
+.settings-nav-btn.active{background:#02b480;color:#052014;box-shadow:0 8px 18px rgba(2,180,128,.35)}
+.settings-panel{background:#0e2436;border-radius:22px;padding:26px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.03);display:flex;flex-direction:column;gap:18px;color:#f3fbff}
+.settings-panel__header h3{margin:0;font-size:1.35rem}
+.settings-panel__hint{margin:4px 0 0;color:#7fb2be;font-size:.95rem}
+
+.account-info-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px}
+.account-info-field{display:flex;flex-direction:column;gap:6px;font-size:.9rem}
+.account-info-field span{color:#8fb0c1;font-weight:600}
+.account-info-field input{border-radius:12px;border:1px dashed rgba(255,255,255,.2);background:#142a3e;color:#e8f7ff;padding:12px 14px;font-weight:600}
+.account-info-field input[readonly]{cursor:not-allowed}
+
+.settings-actions{display:flex;gap:18px;flex-wrap:wrap}
+.linkish-btn,.danger-link{background:none;border:0;font-weight:600;padding:0;color:#00c896;text-decoration:none;cursor:pointer}
+.danger-link{color:#ff5f6d}
+.linkish-btn:hover{text-decoration:underline}
+.danger-link:hover{text-decoration:underline}
+
+.password-form{background:#122c41;border-radius:18px;padding:20px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.04);display:flex;flex-direction:column;gap:16px;transition:max-height .25s ease,opacity .2s ease;margin-top:4px;max-height:520px}
+.password-form.is-hidden{max-height:0;opacity:0;padding:0 20px;overflow:hidden;pointer-events:none}
+.password-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+.password-grid label{display:flex;flex-direction:column;gap:6px;font-size:.85rem;color:#94b1c4}
+.password-grid input{border-radius:10px;border:1px solid rgba(255,255,255,.12);background:#0c2032;color:#fff;padding:12px}
+.password-form__footer{display:flex;flex-direction:column;gap:10px}
+.password-feedback{min-height:20px;font-size:.85rem;color:#a4c5d2;margin:0}
+.password-feedback.error{color:#ff8f8f}
+.password-feedback.success{color:#4dd6a5}
+.password-form__actions{display:flex;gap:10px;flex-wrap:wrap}
+
+@media (max-width:960px){
+	.account-drawer__grid{grid-template-columns:1fr}
+	.settings-nav{flex-direction:row;overflow:auto}
+	.settings-nav-btn{flex:1;min-width:180px}
+	.account-drawer__panel{width:100%;border-radius:0}
+}

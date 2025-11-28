@@ -1,18 +1,6 @@
--- Usa la base de datos existente en XAMPP
-USE projec_padddd;
+-- Usa la base de datos "pa" configurada en XAMPP
+USE pa;
 
--- Tabla para almacenar rutas simples de origen/destino
-CREATE TABLE IF NOT EXISTS routes (
-  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  name VARCHAR(120) NOT NULL,
-  origin_lat DECIMAL(10,6) NULL,
-  origin_lng DECIMAL(10,6) NULL,
-  dest_lat DECIMAL(10,6) NULL,
-  dest_lng DECIMAL(10,6) NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (id)
-);
 
 -- Tabla de usuarios (estructura existente en XAMPP)
 CREATE TABLE IF NOT EXISTS usuario (

@@ -1,7 +1,22 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
+const { URLSearchParams } = require('url');
 const config = require('./config');
 const { Usuario, Route } = require('./sequelize');
+
+const fetchImpl = (() => {
+  if (typeof fetch === 'function') {
+    return fetch.bind(global);
+  }
+  try {
+    return require('node-fetch');
+  } catch (error) {
+    throw new Error('No se encontró un fetch compatible. Actualiza a Node 18+ o instala node-fetch.');
+  }
+})();
+
+const DEFAULT_OSRM_ERROR = 'No se pudo obtener la ruta. Intenta de nuevo más tarde.';
+const BCRYPT_ROUNDS = 10;
 
 let appInstance;
 
@@ -26,6 +41,84 @@ function createServer() {
 
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok' });
+  });
+
+  const parseLatLng = (value) => {
+    if (!value || typeof value !== 'string') return null;
+    const [latRaw, lngRaw] = value.split(',').map((part) => part.trim());
+    const lat = Number(latRaw);
+    const lng = Number(lngRaw);
+    if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
+    return { lat, lng };
+  };
+
+  app.get('/api/osrm-route', async (req, res) => {
+    const origin = parseLatLng(req.query.origin);
+    const dest = parseLatLng(req.query.dest);
+    const profile = (req.query.profile || config.osrm.profile || 'driving').trim();
+
+    if (!origin || !dest) {
+      return res.status(400).json({ message: 'Parámetros inválidos. Usa origin=lat,lng y dest=lat,lng.' });
+    }
+
+    const timeoutMs = Math.max(Number(config.osrm.requestTimeoutMs || 0), 1000);
+    const coords = `${origin.lng},${origin.lat};${dest.lng},${dest.lat}`;
+    const searchParams = new URLSearchParams({
+      overview: 'full',
+      geometries: 'geojson',
+      steps: 'false',
+      alternatives: 'false',
+    });
+    let controller;
+    if (typeof AbortController === 'function') {
+      controller = new AbortController();
+    }
+    const requestUrl = `${config.osrm.baseUrl}/route/v1/${profile}/${coords}?${searchParams.toString()}`;
+
+    let timeoutId;
+    try {
+      if (controller) {
+        timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      }
+
+      const response = await fetchImpl(requestUrl, {
+        signal: controller ? controller.signal : undefined,
+      });
+
+      if (timeoutId) clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const detail = await response.text().catch(() => null);
+        return res.status(502).json({ message: DEFAULT_OSRM_ERROR, detail });
+      }
+
+      const payload = await response.json();
+      if (!payload || payload.code !== 'Ok' || !Array.isArray(payload.routes) || payload.routes.length === 0) {
+        return res.status(502).json({ message: DEFAULT_OSRM_ERROR });
+      }
+
+      const primaryRoute = payload.routes[0];
+      const waypointData = Array.isArray(payload.waypoints) ? payload.waypoints : [];
+      res.json({
+        distance: primaryRoute.distance,
+        duration: primaryRoute.duration,
+        geometry: primaryRoute.geometry,
+        waypoints: waypointData.map((wp) => ({
+          name: wp.name || null,
+          latitude: Array.isArray(wp.location) ? wp.location[1] : null,
+          longitude: Array.isArray(wp.location) ? wp.location[0] : null,
+        })),
+        raw: {
+          bbox: primaryRoute?.bounds ?? null,
+          legs: primaryRoute?.legs?.length ?? 0,
+        },
+      });
+    } catch (error) {
+      if (timeoutId) clearTimeout(timeoutId);
+      const statusCode = error.name === 'AbortError' ? 504 : 500;
+      console.error('[OSRM] Error solicitando ruta:', error.message);
+      res.status(statusCode).json({ message: DEFAULT_OSRM_ERROR });
+    }
   });
 
   const splitName = (fullName) => {
@@ -73,6 +166,27 @@ function createServer() {
   const normalizeEmail = (email) => (email || '').trim().toLowerCase();
   const isBcryptHash = (value) => typeof value === 'string' && value.startsWith('$2');
 
+  const compareAndMaybeUpgradePassword = async (user, plainPassword) => {
+    if (!user || !plainPassword) return false;
+    const passwordHash = user.get('pass_hash');
+    if (!passwordHash) return false;
+
+    if (isBcryptHash(passwordHash)) {
+      return bcrypt.compare(plainPassword, passwordHash);
+    }
+
+    const match = passwordHash === plainPassword;
+    if (match) {
+      try {
+        const upgradedHash = await bcrypt.hash(plainPassword, BCRYPT_ROUNDS);
+        await user.update({ pass_hash: upgradedHash });
+      } catch (upgradeError) {
+        console.warn('No se pudo actualizar el hash del usuario', upgradeError);
+      }
+    }
+    return match;
+  };
+
   // Usuarios
   app.get('/api/users', async (_req, res, next) => {
     try {
@@ -114,7 +228,7 @@ function createServer() {
         return res.status(409).json({ message: 'Ya existe un usuario con ese correo' });
       }
 
-      const passwordHash = await bcrypt.hash(password, 10);
+      const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
       const fullName = `${firstName.trim()} ${lastName ? lastName.trim() : ''}`.trim();
       const user = await Usuario.create({
         nombre: fullName || firstName.trim(),
@@ -157,23 +271,7 @@ function createServer() {
         return res.status(401).json({ message: 'Credenciales inválidas' });
       }
 
-      const passwordHash = user.get('pass_hash');
-      let match = false;
-
-      if (isBcryptHash(passwordHash)) {
-        match = await bcrypt.compare(password, passwordHash);
-      } else if (passwordHash != null) {
-        match = passwordHash === password;
-        if (match) {
-          try {
-            const upgradedHash = await bcrypt.hash(password, 10);
-            await user.update({ pass_hash: upgradedHash });
-          } catch (upgradeError) {
-            console.warn('No se pudo actualizar el hash del usuario', upgradeError);
-          }
-        }
-      }
-
+      const match = await compareAndMaybeUpgradePassword(user, password);
       if (!match) {
         return res.status(401).json({ message: 'Credenciales inválidas' });
       }
@@ -181,6 +279,35 @@ function createServer() {
       await user.update({ ultimo_login: new Date() });
 
       res.json({ user: mapUser(user) });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.put('/api/users/:id/password', async (req, res, next) => {
+    try {
+      const { currentPassword, newPassword } = req.body || {};
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({ message: 'Contraseña actual y nueva son obligatorias' });
+      }
+      if (String(newPassword).length < 8) {
+        return res.status(400).json({ message: 'La nueva contraseña debe tener al menos 8 caracteres' });
+      }
+
+      const user = await Usuario.findByPk(req.params.id);
+      if (!user) {
+        return res.status(404).json({ message: 'Usuario no encontrado' });
+      }
+
+      const match = await compareAndMaybeUpgradePassword(user, currentPassword);
+      if (!match) {
+        return res.status(401).json({ message: 'La contraseña actual es incorrecta' });
+      }
+
+      const newHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+      await user.update({ pass_hash: newHash });
+
+      res.status(204).send();
     } catch (error) {
       next(error);
     }
